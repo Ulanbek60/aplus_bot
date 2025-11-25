@@ -24,3 +24,14 @@ def main_menu(t):
         ],
         resize_keyboard=True
     )
+
+
+def request_phone_keyboard(t):
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=t["send_phone"], request_contact=True)]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
