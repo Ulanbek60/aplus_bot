@@ -27,6 +27,11 @@ async def smart_start(message: Message, state: FSMContext):
     # запросим профиль с backend
     status, data = await user_service.get_profile(uid)
 
+    # backend down → data = None
+    if data is None:
+        await message.answer("Сервер недоступен. Попробуйте позже.")
+        return
+
     # --------------------------------------------------------
     # USER НЕ НАЙДЕН — НУЖНО ЗАПУСКАТЬ РЕГИСТРАЦИЮ
     # --------------------------------------------------------

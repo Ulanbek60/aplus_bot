@@ -10,77 +10,42 @@ class BackendAPI:
     def __init__(self):
         self.base_url = BACKEND_URL.rstrip("/")
 
-    async def _request(self, method: str, endpoint: str, json=None):
-        url = f"{self.base_url}{endpoint}"
+    async def get(self, path: str):
+        url = f"{self.base_url}{path}"
 
         try:
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, json=json) as resp:
+                async with session.get(url) as resp:
                     text = await resp.text()
 
-                    if resp.status >= 400:
-                        logger.error(f"Backend error {resp.status}: {text}")
-                        return None
+                    try:
+                        return resp.status, await resp.json()
+                    except:
+                        logger.error(f"Invalid JSON from backend: {text}")
+                        return resp.status, text
+        except Exception as e:
+            logger.error(f"GET failed: {e}")
+            return 500, None
+
+    async def post(self, path: str, payload: dict):
+        url = f"{self.base_url}{path}"
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(url, json=payload) as resp:
+                    text = await resp.text()
 
                     try:
-                        return await resp.json()
+                        return resp.status, await resp.json()
                     except:
-                        logger.error(f"Invalid JSON: {text}")
-                        return None
-
+                        logger.error(f"Invalid JSON from backend: {text}")
+                        return resp.status, text
         except Exception as e:
-            logger.error(f"Request failed: {e}")
-            return None
-
-    # ----------------------------------------------------------------------
-    # AUTH / REGISTRATION
-    # ----------------------------------------------------------------------
-
-    async def register_user(self, tg_id: int, name: str, phone: str):
-        """
-        POST /api/users/register/
-        """
-        payload = {
-            "tg_id": tg_id,
-            "name": name,
-            "phone": phone
-        }
-        return await self._request("POST", "/api/users/register/", json=payload)
-
-    async def update_lang(self, tg_id: int, lang: str):
-        """
-        POST /api/users/update_lang/
-        """
-        payload = {"tg_id": tg_id, "lang": lang}
-        return await self._request("POST", "/api/users/update_lang/", json=payload)
-
-    async def get_profile(self, tg_id: int):
-        """
-        GET /api/users/profile/<tg_id>/
-        """
-        return await self._request("GET", f"/api/users/profile/{tg_id}/")
-
-    # ----------------------------------------------------------------------
-    # VEHICLES (Incomtek)
-    # ----------------------------------------------------------------------
-
-    async def get_vehicle_list(self):
-        """
-        GET /api/vehicles/list/
-        """
-        return await self._request("GET", "/api/vehicles/list/")
-
-    async def request_vehicle(self, tg_id: int, vehicle_id: int):
-        """
-        POST /api/users/request_vehicle/
-        """
-        payload = {
-            "tg_id": tg_id,
-            "vehicle_id": vehicle_id
-        }
-        return await self._request("POST", "/api/users/request_vehicle/", json=payload)
+            logger.error(f"POST failed: {e}")
+            return 500, None
 
 
-# создаём один глобальный клиент
+# создаём глобальный клиент
 backend_api = BackendAPI()
