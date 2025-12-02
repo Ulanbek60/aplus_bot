@@ -6,42 +6,39 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from states import RegistrationStates
 from locales.i18n import USER_LANG, MESSAGES
 from keyboards import request_phone_keyboard, language_keyboard, main_menu
-from services.backend_client import send_event
-import aiohttp
+
+from services.user_service import user_service
+from services.vehicle_service import vehicle_service
 
 router = Router()
 
 
-def get_t(uid: int):
+def t(uid):
     lang = USER_LANG.get(uid, "ru")
     return MESSAGES[lang]
 
 
 # -----------------------------
-# /start → запуск регистрации
+# /start
 # -----------------------------
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
     uid = message.from_user.id
     USER_LANG[uid] = "ru"
 
-    t = get_t(uid)
-
     await state.set_state(RegistrationStates.waiting_phone)
-
     await message.answer(
-        t["start"],
+        t(uid)["start"],
         reply_markup=language_keyboard()
     )
-
     await message.answer(
-        t["auth_ask_phone"],
-        reply_markup=request_phone_keyboard(t)
+        t(uid)["auth_ask_phone"],
+        reply_markup=request_phone_keyboard(t(uid))
     )
 
 
 # -----------------------------
-# язык выбран
+# Выбор языка
 # -----------------------------
 @router.message(lambda m: m.text in ["Русский", "Кыргызча"])
 async def choose_lang(message: Message, state: FSMContext):
@@ -55,13 +52,10 @@ async def choose_lang(message: Message, state: FSMContext):
 
 
 # -----------------------------
-# ПОЛУЧАЕМ ТЕЛЕФОН → ИМЯ
+# Получаем телефон → имя
 # -----------------------------
 @router.message(F.contact, RegistrationStates.waiting_phone)
 async def reg_phone(message: Message, state: FSMContext):
-    uid = message.from_user.id
-    t = get_t(uid)
-
     phone = message.contact.phone_number
     await state.update_data(phone=phone)
 
@@ -70,70 +64,61 @@ async def reg_phone(message: Message, state: FSMContext):
 
 
 # -----------------------------
-# ПОЛУЧАЕМ ИМЯ → ФАМИЛИЯ
+# Получаем имя → фамилия
 # -----------------------------
 @router.message(RegistrationStates.waiting_name)
 async def reg_name(message: Message, state: FSMContext):
-    name = message.text.strip()
-    await state.update_data(name=name)
+    await state.update_data(name=message.text.strip())
 
     await state.set_state(RegistrationStates.waiting_surname)
     await message.answer("Введите вашу фамилию:")
 
 
 # -----------------------------
-# ПОЛУЧАЕМ ФАМИЛИЮ → РЕГИСТРАЦИЯ НА БЭКЕНДЕ
+# Получаем фамилию → backend register
 # -----------------------------
 @router.message(RegistrationStates.waiting_surname)
 async def reg_surname(message: Message, state: FSMContext):
     uid = message.from_user.id
-    t = get_t(uid)
-
-    surname = message.text.strip()
-
     data = await state.get_data()
 
-    payload = {
-        "telegram_id": uid,
-        "phone": data["phone"],
-        "name": data["name"],
-        "surname": surname,
-        "language": USER_LANG[uid]
-    }
+    name = data["name"]
+    phone = data["phone"]
+    surname = message.text.strip()
+    language = USER_LANG[uid]
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post("http://localhost:8000/api/users/register/", json=payload) as resp:
-            if resp.status != 200:
-                await message.answer(t["backend_error"])
-                return
-            resp_data = await resp.json()
+    status, resp = await user_service.register_user(
+        telegram_id=uid,
+        phone=phone,
+        name=name,
+        surname=surname,
+        language=language
+    )
 
-    await message.answer("Регистрация успешна.\nВыберите технику для работы:")
+    if status != 200:
+        await message.answer(t(uid)["backend_error"])
+        return
 
-    await send_vehicle_list(message, state)
+    await message.answer("Регистрация успешна.\nВыберите технику:")
+
+    await send_vehicle_keyboard(message)
 
 
 # -----------------------------
-# ПОКАЗЫВАЕМ СПИСОК ТЕХНИКИ — INLINE KEYBOARD
+# Показываем список техники
 # -----------------------------
-async def send_vehicle_list(message: Message, state: FSMContext):
+async def send_vehicle_keyboard(message: Message):
     uid = message.from_user.id
-    t = get_t(uid)
+    status, vehicles = await vehicle_service.get_vehicle_list()
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:8000/api/vehicles/list/") as resp:
-            if resp.status != 200:
-                await message.answer(t["backend_error"])
-                return
-            vehicles = await resp.json()
+    if status != 200:
+        await message.answer(t(uid)["backend_error"])
+        return
 
     kb = InlineKeyboardBuilder()
 
     for v in vehicles:
-        kb.button(
-            text=f"{v['name']}",
-            callback_data=f"vehicle:{v['id']}"
-        )
+        kb.button(text=v["name"], callback_data=f"veh:{v['id']}")
 
     kb.adjust(1)
 
@@ -141,25 +126,18 @@ async def send_vehicle_list(message: Message, state: FSMContext):
 
 
 # -----------------------------
-# ВОДИТЕЛЬ ВЫБРАЛ ТЕХНИКУ — ШЛЁМ BACKEND
+# Пользователь выбрал технику
 # -----------------------------
-@router.callback_query(lambda c: c.data.startswith("vehicle:"))
-async def choose_vehicle(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(lambda c: c.data.startswith("veh:"))
+async def vehicle_selected(callback: CallbackQuery, state: FSMContext):
     uid = callback.from_user.id
-    t = get_t(uid)
-
     vehicle_id = callback.data.split(":")[1]
 
-    payload = {
-        "telegram_id": uid,
-        "vehicle_id": vehicle_id
-    }
+    status, resp = await user_service.request_vehicle(uid, vehicle_id)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post("http://localhost:8000/api/users/request_vehicle/", json=payload) as resp:
-            if resp.status != 200:
-                await callback.message.answer(t["backend_error"])
-                return
+    if status != 200:
+        await callback.message.answer(t(uid)["backend_error"])
+        return
 
     await callback.message.answer(
         "Ваша заявка отправлена администратору.\nОжидайте подтверждения."
