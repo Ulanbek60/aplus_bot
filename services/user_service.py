@@ -22,5 +22,9 @@ class UserService:
         status, data = await api_client.post("/api/users/request_vehicle/", payload)
         return status, data
 
+    async def get_profile(self, telegram_id):
+        return await api_client.get(f"/api/users/profile/{telegram_id}/")
+
+
 
 user_service = UserService()

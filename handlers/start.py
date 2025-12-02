@@ -1,52 +1,90 @@
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.types import Message
-from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from keyboards import language_keyboard, main_menu, request_phone_keyboard
-from locales.i18n import USER_LANG, get_text, MESSAGES
+
+from services.user_service import user_service
+from keyboards import language_keyboard, request_phone_keyboard, main_menu
+from locales.i18n import USER_LANG, MESSAGES
+from states import RegistrationStates
 
 router = Router()
 
-@router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext):
+
+def t(uid):
+    lang = USER_LANG.get(uid, "ru")
+    return MESSAGES[lang]
+
+
+# --------------------------------------------------------
+# УМНЫЙ /start — главный вход во всю систему
+# --------------------------------------------------------
+@router.message(F.text == "/start")
+async def smart_start(message: Message, state: FSMContext):
+    await state.clear()
+
     uid = message.from_user.id
 
-    from data.users import AUTH_USERS
-    authorized = uid in AUTH_USERS
+    # запросим профиль с backend
+    status, data = await user_service.get_profile(uid)
 
-    # если НЕ авторизован → только язык и запрос телефона
-    if not authorized:
-        lang_text = get_text(uid, "start")
-        t = MESSAGES.get("ru")  # по умолчанию русский
+    # --------------------------------------------------------
+    # USER НЕ НАЙДЕН — НУЖНО ЗАПУСКАТЬ РЕГИСТРАЦИЮ
+    # --------------------------------------------------------
+    if status == 404 or data.get("status") == "registration":
+        USER_LANG[uid] = "ru"
+
+        await state.set_state(RegistrationStates.waiting_phone)
 
         await message.answer(
-            lang_text,
+            t(uid)["start"],
             reply_markup=language_keyboard()
         )
 
         await message.answer(
-            t["auth_ask_phone"],
-            reply_markup=request_phone_keyboard(t)
+            t(uid)["auth_ask_phone"],
+            reply_markup=request_phone_keyboard(t(uid))
         )
         return
 
-    # если авторизован → показываем меню
-    lang = USER_LANG.get(uid, "ru")
-    t = MESSAGES[lang]
+    # --------------------------------------------------------
+    # USER НАЙДЕН — ЧИТАЕМ ЯЗЫК
+    # --------------------------------------------------------
+    if data.get("language"):
+        USER_LANG[uid] = data["language"]
 
-    await message.answer(
-        t["menu"],
-        reply_markup=main_menu(t)
-    )
+    lang_pack = t(uid)
 
+    user_status = data.get("status")
+    role = data.get("role")
 
-@router.message(lambda m: m.text in ["Русский", "Кыргызча"])
-async def lang_choose(message: Message, state: FSMContext):
-    lang = "ru" if message.text == "Русский" else "kg"
-    USER_LANG[message.from_user.id] = lang
+    # --------------------------------------------------------
+    # ВОДИТЕЛЬ ЖДЁТ ПОДТВЕРЖДЕНИЯ ТЕХНИКИ
+    # --------------------------------------------------------
+    if user_status == "pending_vehicle":
+        await message.answer(
+            "Ваша заявка на привязку техники находится на рассмотрении.\n"
+            "Ожидайте подтверждения администратора."
+        )
+        return
 
+    # --------------------------------------------------------
+    # ВОДИТЕЛЬ АКТИВЕН → показываем главное меню
+    # --------------------------------------------------------
+    if role == "driver" and user_status == "active":
+        await message.answer(
+            lang_pack["menu"],
+            reply_markup=main_menu(lang_pack)
+        )
+        return
 
-    await message.answer(
-        MESSAGES[lang]["menu"],
-        reply_markup=main_menu(MESSAGES[lang])
-    )
+    # --------------------------------------------------------
+    # МЕХАНИК — своё меню (добавим позже)
+    # --------------------------------------------------------
+    if role == "mechanic":
+        await message.answer("Меню механика будет тут. (В разработке)")
+        return
+
+    # --------------------------------------------------------
+    # НЕОПРЕДЕЛЁННОЕ СОСТОЯНИЕ — fallback
+    # --------------------------------------------------------
+    await message.answer("Профиль в неопределённом состоянии. Свяжитесь с админом.")
