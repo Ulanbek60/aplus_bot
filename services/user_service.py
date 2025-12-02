@@ -1,28 +1,25 @@
 # services/user_service.py
 from services.api_client import backend_api
 
-
 class UserService:
-    async def register_user(self, telegram_id, phone, name, surname, language):
+    async def get_profile(self, telegram_id: int):
+        status, data = await backend_api.get(f"/api/users/profile/{telegram_id}/")
+        return status, data
+
+    async def register_user(self, telegram_id: int, phone: str, name: str, surname: str, language: str):
         payload = {
             "telegram_id": telegram_id,
             "phone": phone,
             "name": name,
             "surname": surname,
-            "language": language
+            "language": language,
         }
-        return await backend_api.post("/api/users/register/", payload)
+        status, data = await backend_api.post("/api/users/register/", payload)
+        return status, data
 
-    async def request_vehicle(self, telegram_id, vehicle_id):
-        payload = {
-            "telegram_id": telegram_id,
-            "vehicle_id": vehicle_id
-        }
-        return await backend_api.post("/api/users/request_vehicle/", payload)
+    async def request_vehicle(self, telegram_id: int, vehicle_id: int):
+        payload = {"telegram_id": telegram_id, "vehicle_id": vehicle_id}
+        status, data = await backend_api.post("/api/users/request_vehicle/", payload)
+        return status, data
 
-    async def get_profile(self, telegram_id):
-        return await backend_api.get(f"/api/users/profile/{telegram_id}/")
-
-
-# ВОТ ЭТО ВАЖНО
 user_service = UserService()

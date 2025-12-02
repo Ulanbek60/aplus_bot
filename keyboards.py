@@ -1,5 +1,4 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 
 def language_keyboard():
     return ReplyKeyboardMarkup(
@@ -35,3 +34,17 @@ def request_phone_keyboard(t):
         one_time_keyboard=True
     )
 
+
+def start_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="/start")]],
+        resize_keyboard=True
+    )
+
+
+def cancel_keyboard(t):
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="cancel")]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )

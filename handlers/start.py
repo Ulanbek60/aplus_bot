@@ -1,10 +1,11 @@
+# handlers/start.py
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-
+from keyboards import language_keyboard, request_phone_keyboard, main_menu, start_keyboard
+from locales.i18n import USER_LANG, get_text, MESSAGES
 from services.user_service import user_service
-from keyboards import language_keyboard, request_phone_keyboard, main_menu
-from locales.i18n import USER_LANG, MESSAGES
 from states import RegistrationStates
 
 router = Router()

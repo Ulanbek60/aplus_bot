@@ -12,3 +12,5 @@ class RegistrationStates(StatesGroup):
     waiting_phone = State()
     waiting_name = State()
     waiting_surname = State()
+    waiting_vehicle = State()
+
