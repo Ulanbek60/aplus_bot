@@ -9,8 +9,7 @@ class IssueStates(StatesGroup):
     waiting_photo = State()
 
 class RegistrationStates(StatesGroup):
+    waiting_language = State()
     waiting_phone = State()
     waiting_name = State()
     waiting_surname = State()
-    waiting_vehicle = State()
-

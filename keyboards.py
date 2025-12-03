@@ -1,10 +1,19 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 def language_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Русский")],
-            [KeyboardButton(text="Кыргызча")],
+            [KeyboardButton(text="ru"), KeyboardButton(text="kg"), KeyboardButton(text="en")]
+        ],
+        resize_keyboard=True
+    )
+
+
+def request_phone_keyboard(messages):
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=messages["send_phone"], request_contact=True)]
         ],
         resize_keyboard=True
     )
@@ -23,17 +32,6 @@ def main_menu(t):
         ],
         resize_keyboard=True
     )
-
-
-def request_phone_keyboard(t):
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=t["send_phone"], request_contact=True)]
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
-
 
 def start_keyboard():
     return ReplyKeyboardMarkup(
