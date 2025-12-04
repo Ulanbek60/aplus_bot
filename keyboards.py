@@ -8,7 +8,6 @@ def language_keyboard():
     one_time_keyboard=True
 )
 
-
 def request_phone_keyboard(messages):
     return ReplyKeyboardMarkup(
         keyboard=[

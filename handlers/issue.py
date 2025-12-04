@@ -11,94 +11,69 @@ from states import IssueStates
 router = Router()
 
 
-def get_t(uid: int):
+def t(uid):
     lang = USER_LANG.get(uid, "ru")
     return MESSAGES[lang]
 
 
-@router.message(F.text == "Сообщить о поломке")
+def is_issue_button(text, uid):
+    lang = USER_LANG.get(uid, "ru")
+    return text == MESSAGES[lang]["report_issue"]
+
+
+@router.message(lambda m: is_issue_button(m.text, m.from_user.id))
 async def issue_start(message: Message, state: FSMContext):
     uid = message.from_user.id
-    t = get_t(uid)
+    lang_pack = t(uid)
 
     await state.set_state(IssueStates.waiting_description)
-    await message.answer(
-        t.get("issue_prompt_description", "Опишите проблему словами."),
-        reply_markup=main_menu(t)
-    )
+    await message.answer(lang_pack["issue_prompt_description"], reply_markup=main_menu(lang_pack))
 
 
 @router.message(IssueStates.waiting_description)
 async def issue_receive_description(message: Message, state: FSMContext):
     uid = message.from_user.id
-    t = get_t(uid)
+    lang_pack = t(uid)
 
     text = message.text.strip()
     if not text:
-        await message.answer(t.get("issue_empty_description", "Пожалуйста, опишите проблему несколько слов."), reply_markup=main_menu(t))
+        await message.answer(lang_pack["issue_empty_description"], reply_markup=main_menu(lang_pack))
         return
 
-    # сохраняем описание во временном хранилище состояния
     await state.update_data(issue_description=text)
     await state.set_state(IssueStates.waiting_photo)
 
-    await message.answer(
-        t.get("issue_prompt_photo", "Теперь отправь фото поломки (обязательно)."),
-        reply_markup=main_menu(t)
-    )
+    await message.answer(lang_pack["issue_prompt_photo"], reply_markup=main_menu(lang_pack))
 
 
 @router.message(F.photo, IssueStates.waiting_photo)
 async def issue_receive_photo(message: Message, state: FSMContext):
     uid = message.from_user.id
-    t = get_t(uid)
+    lang_pack = t(uid)
 
     photo: PhotoSize = message.photo[-1]
-    photo_file_id = photo.file_id
-
-    data = await state.get_data()
-    description = data.get("issue_description", "")
-
-    # payload с метаданными
     payload = {
         "user_id": uid,
-        "issue": description,
-        "photo_file_id": photo_file_id,
+        "issue": (await state.get_data()).get("issue_description"),
+        "photo_file_id": photo.file_id,
         "created_at": datetime.utcnow().isoformat() + "Z"
     }
 
-    # отправляем на backend
     try:
         await send_event("issue", payload)
-    except Exception as e:
-        # если бэкенд упал — логируем и говорим пользователю аккуратно
-        await message.answer(t.get("issue_send_error", "Ошибка при отправке на сервер. Попробуйте позже."))
+    except Exception:
+        await message.answer(lang_pack["issue_send_error"])
         await state.clear()
         return
 
-    await message.answer(
-        t.get("issue_saved", "Спасибо, информация о поломке отправлена."),
-        reply_markup=main_menu(t)
-    )
-
+    await message.answer(lang_pack["issue_saved"], reply_markup=main_menu(lang_pack))
     await state.clear()
 
 
 @router.message(lambda m: True, IssueStates.waiting_photo)
 async def issue_no_photo(message: Message, state: FSMContext):
-    # если пользователь отправил не фото
     uid = message.from_user.id
-    t = get_t(uid)
-    await message.answer(
-        t.get("issue_photo_required", "Нужно отправить фото. Попробуй ещё раз."),
-        reply_markup=main_menu(t)
-    )
+    lang_pack = t(uid)
+    await message.answer(lang_pack["issue_photo_required"], reply_markup=main_menu(lang_pack))
 
 
-# отмена разрешена в любом состоянии — если уже есть общий cancel handler, можно убрать этот
-@router.message(F.text == "Отмена")
-async def issue_cancel(message: Message, state: FSMContext):
-    uid = message.from_user.id
-    t = get_t(uid)
-    await state.clear()
-    await message.answer(t.get("menu", "Главное меню"), reply_markup=main_menu(t))
