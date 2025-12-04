@@ -1,8 +1,9 @@
-from .api_client import api_client
+from services.api_client import backend_api
+
 
 class VehicleService:
     async def get_vehicle_list(self):
-        status, data = await api_client.get("/api/vehicles/list/")
+        status, data = await backend_api.get("/api/vehicles/list/")
         return status, data
 
 

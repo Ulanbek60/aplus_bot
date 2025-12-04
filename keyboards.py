@@ -3,11 +3,10 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 def language_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="ru"), KeyboardButton(text="kg"), KeyboardButton(text="en")]
-        ],
-        resize_keyboard=True
-    )
+    keyboard=[[KeyboardButton(text="ru"), KeyboardButton(text="kg")]],
+    resize_keyboard=True,
+    one_time_keyboard=True
+)
 
 
 def request_phone_keyboard(messages):

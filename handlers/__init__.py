@@ -9,10 +9,10 @@ from .registration import router as registration_router
 
 def register_all_handlers(dp):
     dp.include_router(start_router)
+    dp.include_router(registration_router)
     dp.include_router(auth_router)
     dp.include_router(fuel_router)
     dp.include_router(shift_router)
     dp.include_router(issue_router)
-    dp.include_router(fallback_router)
     dp.include_router(profile_router)
-    dp.include_router(registration_router)
+    dp.include_router(fallback_router)
