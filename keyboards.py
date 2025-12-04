@@ -3,10 +3,15 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 def language_keyboard():
     return ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="ru"), KeyboardButton(text="kg")]],
-    resize_keyboard=True,
-    one_time_keyboard=True
-)
+        keyboard=[
+            [
+                KeyboardButton(text="🇷🇺 Русский"),
+                KeyboardButton(text="🇰🇬 Кыргызча")
+            ]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
 
 def request_phone_keyboard(messages):
     return ReplyKeyboardMarkup(
@@ -20,13 +25,13 @@ def request_phone_keyboard(messages):
 def main_menu(t):
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=t["start_shift"])],
-            [KeyboardButton(text=t["end_shift"])],
+            [KeyboardButton(text=f"🟢 {t['start_shift']}")],
+            [KeyboardButton(text=f"🔴 {t['end_shift']}")],
             [
-                KeyboardButton(text=t["fuel"]),
-                KeyboardButton(text=t["report_issue"])
+                KeyboardButton(text=f"⛽ {t['fuel']}"),
+                KeyboardButton(text=f"🛠 {t['report_issue']}")
             ],
-            [KeyboardButton(text=t["cancel"])]
+            [KeyboardButton(text=f"❌ {t['cancel']}")]
         ],
         resize_keyboard=True
     )

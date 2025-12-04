@@ -10,6 +10,7 @@ from services.user_service import user_service
 from keyboards import language_keyboard, main_menu
 from locales.i18n import USER_LANG, MESSAGES
 from states import FullRegistrationStates
+from services.state import PENDING_USERS
 
 router = Router()
 
@@ -52,8 +53,8 @@ async def smart_start(message: Message, state: FSMContext):
     u_status = profile.get("status")
 
     if role == "driver" and u_status == "pending_vehicle":
+        PENDING_USERS.add(uid)
         await message.answer(t(uid, "pending_vehicle"))
-        asyncio.create_task(wait_for_approval(message.bot, uid))
         return
 
     if role == "driver" and u_status == "active":

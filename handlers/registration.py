@@ -9,6 +9,7 @@ from states import FullRegistrationStates
 from locales.i18n import USER_LANG, MESSAGES
 from services.user_service import user_service
 from services.vehicle_service import vehicle_service
+from services.state import PENDING_USERS
 
 router = Router()
 
@@ -51,9 +52,13 @@ def normalize_phone(p: str):
 
 @router.message(FullRegistrationStates.waiting_language)
 async def reg_language(message: Message, state: FSMContext):
-    lang = message.text.lower()
-    if lang not in ("ru", "kg"):
-        await message.answer("Выберите язык кнопками.")
+    text = message.text.lower()
+    if "рус" in text:
+        lang = "ru"
+    elif "кырг" in text:
+        lang = "kg"
+    else:
+        await message.answer("Используйте кнопки.")
         return
 
     USER_LANG[message.from_user.id] = lang
@@ -326,5 +331,7 @@ async def reg_vehicle_select(message: Message, state: FSMContext):
         await message.answer(t(uid, "register_error"))
         return
 
+
+    PENDING_USERS.add(uid)
     await message.answer(t(uid, "pending_vehicle"), reply_markup=ReplyKeyboardRemove())
     await state.clear()
