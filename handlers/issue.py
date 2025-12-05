@@ -1,8 +1,8 @@
 from aiogram import Router, F
-from aiogram.types import Message, PhotoSize
+from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
-from datetime import datetime
 
+from helpers.buttons import btn_match
 from locales.i18n import USER_LANG, MESSAGES
 from keyboards import main_menu
 from services.backend_client import send_event
@@ -10,70 +10,51 @@ from states import IssueStates
 
 router = Router()
 
-
-def t(uid):
+def t(uid, key):
     lang = USER_LANG.get(uid, "ru")
-    return MESSAGES[lang]
+    return MESSAGES[lang][key]
 
 
-def is_issue_button(text, uid):
-    lang = USER_LANG.get(uid, "ru")
-    return text == MESSAGES[lang]["report_issue"]
-
-
-@router.message(lambda m: is_issue_button(m.text, m.from_user.id))
+# запуск поломки
+@router.message(lambda m: btn_match(m.text, ["полом", "бузулуу"]))
 async def issue_start(message: Message, state: FSMContext):
     uid = message.from_user.id
-    lang_pack = t(uid)
 
     await state.set_state(IssueStates.waiting_description)
-    await message.answer(lang_pack["issue_prompt_description"], reply_markup=main_menu(lang_pack))
+    await message.answer(t(uid, "issue_prompt_description"))
 
 
 @router.message(IssueStates.waiting_description)
-async def issue_receive_description(message: Message, state: FSMContext):
+async def issue_desc(message: Message, state: FSMContext):
     uid = message.from_user.id
-    lang_pack = t(uid)
 
-    text = message.text.strip()
-    if not text:
-        await message.answer(lang_pack["issue_empty_description"], reply_markup=main_menu(lang_pack))
+    if len(message.text.strip()) < 3:
+        await message.answer(t(uid, "issue_empty_description"))
         return
 
-    await state.update_data(issue_description=text)
+    await state.update_data(description=message.text.strip())
     await state.set_state(IssueStates.waiting_photo)
-
-    await message.answer(lang_pack["issue_prompt_photo"], reply_markup=main_menu(lang_pack))
+    await message.answer(t(uid, "issue_prompt_photo"))
 
 
 @router.message(F.photo, IssueStates.waiting_photo)
-async def issue_receive_photo(message: Message, state: FSMContext):
+async def issue_photo(message: Message, state: FSMContext):
     uid = message.from_user.id
-    lang_pack = t(uid)
+    data = await state.get_data()
 
-    photo: PhotoSize = message.photo[-1]
     payload = {
         "user_id": uid,
-        "issue": (await state.get_data()).get("issue_description"),
-        "photo_file_id": photo.file_id,
-        "created_at": datetime.utcnow().isoformat() + "Z"
+        "issue": data["description"],
+        "photo_file_id": message.photo[-1].file_id
     }
 
-    try:
-        await send_event("issue", payload)
-    except Exception:
-        await message.answer(lang_pack["issue_send_error"])
-        await state.clear()
-        return
-
-    await message.answer(lang_pack["issue_saved"], reply_markup=main_menu(lang_pack))
+    await send_event("issue", payload)
+    lang = USER_LANG.get(uid, "ru")
+    await message.answer(t(uid, "issue_saved"), reply_markup=main_menu(MESSAGES[lang]))
     await state.clear()
 
 
-@router.message(lambda m: True, IssueStates.waiting_photo)
-async def issue_no_photo(message: Message, state: FSMContext):
+@router.message(IssueStates.waiting_photo)
+async def wrong_issue_photo(message: Message):
     uid = message.from_user.id
-    lang_pack = t(uid)
-    await message.answer(lang_pack["issue_photo_required"], reply_markup=main_menu(lang_pack))
-
-
+    await message.answer(t(uid, "issue_photo_required"))

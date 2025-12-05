@@ -10,8 +10,55 @@ from locales.i18n import USER_LANG, MESSAGES
 from services.user_service import user_service
 from services.vehicle_service import vehicle_service
 from services.state import PENDING_USERS
+from datetime import datetime
 
 router = Router()
+
+def parse_birthdate(text: str):
+
+    # заменяем любые разделители на точку
+    cleaned = (
+        text.replace("/", ".")
+            .replace("-", ".")
+            .replace(",", ".")
+            .replace(" ", ".")
+    )
+
+    parts = cleaned.split(".")
+    parts = [p for p in parts if p]  # убираем пустые
+
+    if len(parts) != 3:
+        return None
+
+    try:
+        day = int(parts[0])
+        month = int(parts[1])
+        year = int(parts[2])
+    except:
+        return None
+
+    # Проверки диапазонов
+    if not (1 <= day <= 31):
+        return None
+    if not (1 <= month <= 12):
+        return None
+    if not (1900 <= year <= datetime.now().year):
+        return None
+
+    # Пробуем собрать дату
+    try:
+        birthdate = datetime(year, month, day)
+    except:
+        return None
+
+    # Проверяем возраст 18+
+    today = datetime.now()
+    age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+    if age < 18:
+        return "too_young"
+
+    return birthdate.strftime("%Y-%m-%d")
+
 
 
 def t(uid, key):
@@ -98,16 +145,23 @@ async def reg_surname(message: Message, state: FSMContext):
 
 @router.message(FullRegistrationStates.waiting_birthdate)
 async def reg_birthdate(message: Message, state: FSMContext):
-    try:
-        d = date_parse(message.text.strip(), dayfirst=True)
-    except Exception:
-        await message.answer(t(message.from_user.id, "wrong_birthdate"))
+    uid = message.from_user.id
+    text = message.text.strip()
+
+    result = parse_birthdate(text)
+
+    if result is None:
+        await message.answer(t(uid, "wrong_birthdate"))
         return
 
-    await state.update_data(birthdate=d.strftime("%Y-%m-%d"))
+    if result == "too_young":
+        await message.answer(t(uid, "too_young"))
+        return
+
+    await state.update_data(birthdate=result)
 
     await state.set_state(FullRegistrationStates.waiting_phone)
-    await message.answer(t(message.from_user.id, "reg_phone"))
+    await message.answer(t(uid, "reg_phone"))
 
 
 # ============================================================

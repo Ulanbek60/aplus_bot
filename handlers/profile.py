@@ -1,49 +1,49 @@
-# handlers/profile.py
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.types import Message
 
-from services.api_client import backend_api
+from services.user_service import user_service
 from locales.i18n import USER_LANG, MESSAGES
 from keyboards import main_menu
 
 router = Router()
 
 
-def t(uid):
+def lang_pack(uid):
     lang = USER_LANG.get(uid, "ru")
     return MESSAGES[lang]
 
 
-@router.message(lambda m: m.text.lower() in ["профиль", "profile", "профильим", "профильим"])  # KG можно добавить ещё
+@router.message(F.text)
 async def profile_handler(message: Message):
     uid = message.from_user.id
-    lang_pack = t(uid)
+    lp = lang_pack(uid)
 
-    status, profile = await backend_api.get_profile(uid)
-
-    if status != 200 or not profile:
-        await message.answer(lang_pack["backend_error"])
-        await message.answer(lang_pack["menu"], reply_markup=main_menu(lang_pack))
+    # Мы ловим только команды профиля
+    if message.text.lower() not in ["профиль", "profile", "профильим"]:
         return
 
-    # Получаем локализованные поля
-    name = profile.get("name", "—")
-    surname = profile.get("surname", "")
-    phone = profile.get("phone", "—")
-    role = profile.get("role", "driver")
-    status_text = profile.get("status", "—")
+    status, resp = await user_service.get_profile(uid)
 
-    vehicle_id = profile.get("vehicle_id")
-    vehicle_text = vehicle_id if vehicle_id else lang_pack.get("vehicle_none", "Не прикреплено")
+    if status != 200 or not resp or resp.get("error"):
+        await message.answer(lp["backend_error"])
+        await message.answer(lp["menu"], reply_markup=main_menu(lp))
+        return
 
-    # Локализованный текст
+    name = resp.get("name", "—")
+    phone = resp.get("phone", "—")
+    vehicle = resp.get("vehicle_id")
+
+    vehicle_text = vehicle if vehicle else lp["vehicle_none"]
+
     msg = (
-        f"<b>{lang_pack['profile_title']}</b>\n"
-        f"{lang_pack['profile_name']}: <b>{name} {surname}</b>\n"
-        f"{lang_pack['profile_phone']}: <b>{phone}</b>\n"
-        f"{lang_pack['profile_role']}: <b>{role}</b>\n"
-        f"{lang_pack['profile_status']}: <b>{status_text}</b>\n"
-        f"{lang_pack['profile_vehicle']}: <b>{vehicle_text}</b>"
+        f"📄 <b>{lp['profile_title']}</b>\n"
+        f"{lp['profile_name']}: <b>{name}</b>\n"
+        f"{lp['profile_phone']}: <b>{phone}</b>\n"
+        f"{lp['profile_vehicle']}: <b>{vehicle_text}</b>"
     )
 
-    await message.answer(msg, parse_mode="HTML", reply_markup=main_menu(lang_pack))
+    await message.answer(
+        msg,
+        parse_mode="HTML",
+        reply_markup=main_menu(lp)
+    )

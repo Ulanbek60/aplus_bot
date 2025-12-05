@@ -1,92 +1,66 @@
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
-from states import FuelStates
-from keyboards import main_menu
+
+from helpers.buttons import btn_match
 from locales.i18n import USER_LANG, MESSAGES
+from keyboards import main_menu
 from services.backend_client import send_event
-import logging
+from states import FuelStates
 
 router = Router()
-logger = logging.getLogger(__name__)
 
-
-def t(uid):
+def t(uid, key):
     lang = USER_LANG.get(uid, "ru")
-    return MESSAGES[lang]
+    return MESSAGES[lang][key]
 
 
-def is_fuel_button(text, uid):
-    lang = USER_LANG.get(uid, "ru")
-    return text == MESSAGES[lang]["fuel"]
-
-
-@router.message(lambda m: is_fuel_button(m.text, m.from_user.id))
+# Запуск заправки
+@router.message(lambda m: btn_match(m.text, ["заправ", "толтуруу"]))
 async def fuel_start(message: Message, state: FSMContext):
     uid = message.from_user.id
-    lang_pack = t(uid)
 
     await state.set_state(FuelStates.waiting_photo)
-    await message.answer(lang_pack["ask_fuel_photo"])
-
-    logger.info(f"User {uid} started fuel report")
+    await message.answer(t(uid, "ask_fuel_photo"))
 
 
 @router.message(F.photo, FuelStates.waiting_photo)
-async def fuel_receive_photo(message: Message, state: FSMContext):
+async def get_photo(message: Message, state: FSMContext):
+    await state.update_data(photo=message.photo[-1].file_id)
+
     uid = message.from_user.id
-    lang_pack = t(uid)
-
-    photo = message.photo[-1]
-    await state.update_data(photo_id=photo.file_id)
-
     await state.set_state(FuelStates.waiting_liters)
-    await message.answer(lang_pack["ask_fuel_liters"])
-
-    logger.info(f"User {uid} uploaded fuel photo")
+    await message.answer(t(uid, "ask_fuel_liters"))
 
 
 @router.message(FuelStates.waiting_photo)
-async def fuel_no_photo(message: Message, state: FSMContext):
+async def wrong_photo(message: Message):
     uid = message.from_user.id
-    lang_pack = t(uid)
-
-    await message.answer(lang_pack["fuel_photo_required"], reply_markup=main_menu(lang_pack))
+    await message.answer(t(uid, "fuel_photo_required"))
 
 
-@router.message(F.text.regexp(r"^\d+(?:[.,]\d+)?$"), FuelStates.waiting_liters)
-async def fuel_receive_liters(message: Message, state: FSMContext):
+@router.message(F.text, FuelStates.waiting_liters)
+async def get_liters(message: Message, state: FSMContext):
     uid = message.from_user.id
-    lang_pack = t(uid)
+    text = message.text.replace(",", ".")
 
-    liters = float(message.text.replace(",", "."))
+    if not text.replace(".", "").isdigit():
+        await message.answer(t(uid, "fuel_need_number"))
+        return
 
+    liters = float(text)
     if liters <= 0 or liters > 500:
-        await message.answer(lang_pack["fuel_invalid_amount"], reply_markup=main_menu(lang_pack))
+        await message.answer(t(uid, "fuel_invalid_amount"))
         return
 
     data = await state.get_data()
-
     payload = {
         "user_id": uid,
         "liters": liters,
-        "photo_file_id": data.get("photo_id"),
+        "photo_file_id": data.get("photo")
     }
 
-    try:
-        await send_event("fuel", payload)
-    except Exception:
-        await message.answer(lang_pack["backend_error"], reply_markup=main_menu(lang_pack))
-        await state.clear()
-        return
-
-    await message.answer(lang_pack["saved"], reply_markup=main_menu(lang_pack))
+    await send_event("fuel", payload)
+    lang = USER_LANG.get(uid, "ru")
+    await message.answer(t(uid, "saved"), reply_markup=main_menu(MESSAGES[lang]))
     await state.clear()
-
-
-@router.message(FuelStates.waiting_liters)
-async def fuel_invalid_liters(message: Message, state: FSMContext):
-    uid = message.from_user.id
-    lang_pack = t(uid)
-
-    await message.answer(lang_pack["fuel_need_number"], reply_markup=main_menu(lang_pack))
